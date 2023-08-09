@@ -9,8 +9,6 @@ import warnings
 
 from transformers import AutoModel, AutoTokenizer
 
-from label_lstm.model_bert import BertLSTMNet
-from preprocess_data import Preprocess
 from global_parameter import StaticParameter as SP
 from mini_tool import WordSegment, error_callback
 

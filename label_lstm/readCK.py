@@ -8,13 +8,18 @@
 ------------      -------    --------    -----------
 2023/7/17 11:02   lpx        1.0         none
 """
+import time
 
 from clickhouse_sqlalchemy import make_session, get_declarative_base
 from sqlalchemy import create_engine, Column, types, and_, text
 import pandas as pd
 import logging
 
-from label_lstm.predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
+from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
+# sys.path.append("/home/data/temp/zhouzx/classify_label/label_lstm")
+# from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
+
+
 
 # 创建ClickhouseClient类
 class ClickhouseClient:
@@ -185,7 +190,7 @@ def get_data(city_list):
 def upload_predict_data():
     logging.info("预测数据集上传到数据库")
     for index in range(8):
-        data = pd.read_csv('pretic'+str(index) + '.csv', index_col=False)
+        data = pd.read_csv('pretic' + str(index) + '.csv', index_col=False)
         data_dict = data.to_dict(orient='records')
         data_list = [list(row.values()) for row in data_dict]
         clickhouse_client.insert_data(table_name='ods_di_store_labeling', data=data_list)
@@ -197,8 +202,12 @@ if __name__ == '__main__':
     cities = get_cities()
     # 条件查询划分8个csv文件
     get_data(cities)
-    # 加载模型 预测结果
+    start1 = time.time()
+    # # 加载模型 预测结果
     rerun_get_CK_file(cities)
     predict_result_forCK_bert()
-    # 分类算法预测类别，建表并上传数据
+    end1 = time.time()
+    logging.info('加载模型 预测结果 time: %s minutes' % ((end1 - start1) / 60))
+    # # 分类算法预测类别，建表并上传数据
     upload_predict_data()
+# nohup python -u readCK.py > ck_log.log 2>&1 &
