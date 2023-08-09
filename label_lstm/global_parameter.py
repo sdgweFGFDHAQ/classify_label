@@ -14,6 +14,6 @@ class StaticParameter:
     PATH_TRAIN = 'standard_store_'
     # Linux服务器参数
     PATH_ZZX = '/home/data/temp/zhouzx'
-    PATH_ZZX_DATA = '/home/data/temp/zhouzx/data/test/'
-    PATH_ZZX_STANDARD_DATA = '/home/data/temp/zhouzx/standard_data/test/'
-    PATH_ZZX_PREDICT_DATA = '/home/data/temp/zhouzx/predict_data/test/'
+    PATH_ZZX_DATA = '/home/data/temp/zhouzx/data/'
+    PATH_ZZX_STANDARD_DATA = '/home/data/temp/zhouzx/standard_data/'
+    PATH_ZZX_PREDICT_DATA = '/home/data/temp/zhouzx/predict_data/'
