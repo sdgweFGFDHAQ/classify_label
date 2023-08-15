@@ -24,6 +24,10 @@ from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 logging.basicConfig(filename="readCK.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
                     datefmt="%d-%M-%Y %H:%M:%S", level=logging.INFO)
 
+data_path = '/home/DI/zhouzx/code/classify_label/data/'
+predict_path = '/home/DI/zhouzx/code/classify_label/predict_data/'
+download_table_name = 'ods_di_store'
+upload_table_name = 'ods_di_store_labeling'
 
 # 创建ClickhouseClient类
 class ClickhouseClient:
@@ -198,9 +202,9 @@ def get_data(cities):
             print("开始执行sql")
             columns = ['id', 'name', 'city']
             filters = {'city': cityname}
-            data = clickhouse_client.query_data("ods_di_store", columns=columns, filters=filters)
+            data = clickhouse_client.query_data(download_table_name, columns=columns, filters=filters)
             data_df = pd.DataFrame(data, columns=['id', 'name', 'city'])
-            data_df.to_csv('/home/DI/zhouzx/code/classify_label/data/' + str(cityname) + '.csv')
+            data_df.to_csv(data_path + str(cityname) + '.csv')
         except Exception as e:
             print(str(cityname) + "出错：" + str(e) + "!")
     logging.info("数据集全部下载完成!")
@@ -211,11 +215,11 @@ def upload_predict_data():
     logging.info("预测数据集上传到数据库")
     for index in range(8):
         data = pd.read_csv(
-            '/home/DI/zhouzx/code/classify_label/predict_data/predict_CK_category_' + str(index) + '.csv',
+            predict_path + 'predict_CK_category_' + str(index) + '.csv',
             index_col=False)
         data_dict = data.to_dict(orient='records')
         data_list = [list(row.values()) for row in data_dict]
-        clickhouse_client.insert_data(table_name='ods_di_store_labeling', data=data_list)
+        clickhouse_client.insert_data(table_name=upload_table_name, data=data_list)
     logging.info("写入数据库完成!")
 
 

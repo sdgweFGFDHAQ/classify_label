@@ -5,6 +5,7 @@ from multiprocessing import Pool
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader, TensorDataset
+from tqdm import tqdm
 import warnings
 
 from transformers import AutoModel, AutoTokenizer
@@ -102,6 +103,9 @@ def get_city_forCK(city_list):
 
 
 def predict_result(df, dataloder, model, idx2lab, part_i):
+    # 进度条
+    progress_bar = tqdm(total=len(dataloder), desc='Predicting')
+
     pre_lists = list()
     # 將 model 的模式设定为 eval，固定model的参数
     model.eval()
@@ -115,6 +119,11 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
             outputs = outputs.squeeze(1)
             pre_label = outputs.argmax(axis=1)
             pre_lists.extend(pre_label)
+
+            # 更新进度条
+            progress_bar.update(1)
+    # 关闭进度条
+    progress_bar.close()
     cate_lists = []
     for ind in pre_lists:
         cate_lists.append(idx2lab[ind.item()])
@@ -148,7 +157,7 @@ def predict_result_forCK_bert():
         df = df[(df['cut_name'].notna() & df['cut_name'].notnull())]
         # 处理特征
         dataset = MyDataset(df)
-        pre_dataloder = DataLoader(dataset=dataset, batch_size=2048, shuffle=False, drop_last=False)
+        pre_dataloder = DataLoader(dataset=dataset, batch_size=512, shuffle=False, drop_last=False)
 
         idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
 
