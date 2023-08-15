@@ -10,6 +10,7 @@ import warnings
 from transformers import AutoModel, AutoTokenizer
 
 from global_parameter import StaticParameter as SP
+from model_bert import BertLSTMNet
 from mini_tool import WordSegment, error_callback
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -18,28 +19,38 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 pretrian_bert_url = "IDEA-CCNL/Erlangshen-DeBERTa-v2-97M-Chinese"
 
 
-class DefineDataset(Dataset):
-    def __init__(self, x, y):
-        self.data = x
-        self.label = y
+class MyDataset(Dataset):
+    def __init__(self, dataframe):
+        self.data = self.load_data(dataframe)
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrian_bert_url)
 
-    def __getitem__(self, index):
-        if self.label is None:
-            return self.data[index]
-        return self.data[index], self.label[index]
+    def load_data(self, df):
+        # 从数据路径加载数据
+        # 返回数据列表，每个元素是一个样本
+        name_lists = df['cut_name'].tolist()
+        return name_lists
 
     def __len__(self):
         return len(self.data)
 
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        # 将中文文本转换为 tokens
+        encoded_dict = self.tokenizer.encode_plus(sample,
+                                                  add_special_tokens=True, max_length=12, padding='max_length',
+                                                  truncation=True, return_tensors='pt')
+        input_ids = encoded_dict['input_ids']
+        attention_mask = encoded_dict['attention_mask']
+        return input_ids.squeeze(0), attention_mask.squeeze(0)
 
-# 读取原始文件,将数据格式标准化
+
 # 批量标准化
 def set_file_standard_data(city_list, part_i):
     for city in city_list:
         path_city = SP.PATH_ZZX_DATA + city + '.csv'
         path_part = SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv'
         if os.path.exists(path_city):
-            csv_data = pd.read_csv(path_city, usecols=['id', 'name', 'city'])
+            csv_data = pd.read_csv(path_city, usecols=['id', 'name', 'city'], keep_default_na=False)
             # 得到标准数据
             segment = WordSegment()
             csv_data['cut_name'] = csv_data['name'].apply(segment.cut_word)
@@ -91,31 +102,26 @@ def get_city_forCK(city_list):
 
 
 def predict_result(df, dataloder, model, idx2lab, part_i):
-    try:
-        pre_lists = list()
-        # 將 model 的模式设定为 eval，固定model的参数
-        model.eval()
-        with torch.no_grad():
-            for i, (inputs, masks) in enumerate(dataloder):
-                # 1. 放到GPU上
-                inputs = inputs.to(device, dtype=torch.long)
-                masks = masks.to(device, dtype=torch.long)
-                # 2. 计算输出
-                outputs = model(inputs, masks)
-                outputs = outputs.squeeze(1)
-                pre_label = outputs.argmax(axis=1)
-                pre_lists.extend(pre_label)
-        cate_lists = []
-        for ind in pre_lists:
-            cate_lists.append(idx2lab[ind.item()])
-        result = pd.DataFrame(
-            {'store_id': df['id'], 'name': df['name'], 'city': df['city'],
-             'predict_category': cate_lists})
-        result.to_csv(SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv')
-    except Exception as e:
-        with open('error_city.txt', 'a') as ef:
-            ef.write(str(time.time()))
-            ef.write('出错的city: ' + str(part_i) + '; 异常e:' + str(e))
+    pre_lists = list()
+    # 將 model 的模式设定为 eval，固定model的参数
+    model.eval()
+    with torch.no_grad():
+        for i, (inputs, masks) in enumerate(dataloder):
+            # 1. 放到GPU上
+            inputs = inputs.to(device, dtype=torch.long)
+            masks = masks.to(device, dtype=torch.long)
+            # 2. 计算输出
+            outputs = model(inputs, masks)
+            outputs = outputs.squeeze(1)
+            pre_label = outputs.argmax(axis=1)
+            pre_lists.extend(pre_label)
+    cate_lists = []
+    for ind in pre_lists:
+        cate_lists.append(idx2lab[ind.item()])
+    result = pd.DataFrame(
+        {'store_id': df['id'], 'name': df['name'], 'city': df['city'],
+         'predict_category': cate_lists})
+    result.to_csv(SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv')
 
 
 def predict_result_forCK_bert():
@@ -125,35 +131,27 @@ def predict_result_forCK_bert():
             open(path_pre, "r+").truncate()
 
     cat_df = pd.read_csv('category_to_id.csv')
-    tokenizer = AutoTokenizer.from_pretrained(pretrian_bert_url)
-
-    # bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
-    # category_number = cat_df.shape[0]  # 78
-    # lstm_model = BertLSTMNet(
-    #     bert_embedding=bert_layer,
-    #     input_dim=768,
-    #     hidden_dim=128,
-    #     num_classes=category_number,
-    #     num_layers=2
-    # ).to(device)
-    # lstm_model.load_state_dict(torch.load("best_lstm_bert.pth"))
-    lstm_model = torch.load('best_lstm_bert_3.model')
+    bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
+    category_number = cat_df.shape[0]  # 78
+    lstm_model = BertLSTMNet(
+        bert_embedding=bert_layer,
+        input_dim=768,
+        hidden_dim=128,
+        num_classes=category_number,
+        num_layers=2
+    ).to(device)
+    lstm_model.load_state_dict(torch.load("best_lstm_bert.pth"))
+    # lstm_model = torch.load('best_lstm_bert_3.model')
 
     for part_i in range(SP.SEGMENT_NUMBER):
         df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv')
         df = df[(df['cut_name'].notna() & df['cut_name'].notnull())]
-
         # 处理特征
-        encoded_dict = tokenizer.batch_encode_plus(df['cut_name'].tolist(),
-                                                   add_special_tokens=True, max_length=12, padding='max_length',
-                                                   truncation=True, return_tensors='pt')
-        input_ids = encoded_dict['input_ids']
-        attention_masks = encoded_dict['attention_mask']
-        pre_x = TensorDataset(input_ids, attention_masks)
-
-        pre_dataloder = DataLoader(dataset=pre_x, batch_size=512, shuffle=False, drop_last=False)
+        dataset = MyDataset(df)
+        pre_dataloder = DataLoader(dataset=dataset, batch_size=2048, shuffle=False, drop_last=False)
 
         idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
+
         predict_result(df, pre_dataloder, lstm_model, idx2lab, part_i)
         print("predict_CK_category_{} 写入完成".format(part_i))
 

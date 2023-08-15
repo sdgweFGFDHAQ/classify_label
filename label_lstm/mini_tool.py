@@ -2,6 +2,7 @@ import re
 import jieba
 from torch.utils.data import Dataset
 
+# jieba.set_dictionary('tmp')
 
 # 分词工具类
 class WordSegment:

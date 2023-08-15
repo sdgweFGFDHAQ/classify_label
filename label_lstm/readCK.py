@@ -8,6 +8,7 @@
 ------------      -------    --------    -----------
 2023/7/17 11:02   lpx        1.0         none
 """
+import os
 import time
 
 from clickhouse_sqlalchemy import make_session, get_declarative_base
@@ -16,9 +17,12 @@ import pandas as pd
 import logging
 
 from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
+
 # sys.path.append("/home/data/temp/zhouzx/classify_label/label_lstm")
 # from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 
+logging.basicConfig(filename="readCK.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
+                    datefmt="%d-%M-%Y %H:%M:%S", level=logging.INFO)
 
 
 # 创建ClickhouseClient类
@@ -42,16 +46,31 @@ class ClickhouseClient:
 
         return Table
 
-    def insert_data(self, table_name, data):
+    def insert_data(self, table_name, data, batch_size=100000):
         session = self._session
 
         try:
             table = self.create_table(table_name)
+            batch = []
+            count = 0
+
             for item in data:
                 row = table(**item)
-                session.add(row)
+                batch.append(row)
+                count += 1
 
-            session.commit()
+                if count >= batch_size:
+                    session.add_all(batch)
+                    session.commit()
+                    print(f"Inserted {count} records.")
+                    batch = []
+                    count = 0
+
+            if batch:
+                session.add_all(batch)
+                session.commit()
+                print(f"Inserted {count} records.")
+
             print("Data inserted successfully.")
         except Exception as e:
             session.rollback()
@@ -118,7 +137,6 @@ conf = {
 }
 
 # 创建clickhouse客户端
-
 clickhouse_client = ClickhouseClient(conf)
 
 
@@ -158,20 +176,22 @@ clickhouse_client = ClickhouseClient(conf)
 # sql查询获取城市集合
 def get_cities():
     logging.info("获取城市列表：")
-    sql = """
-    SELECT DISTINCT city FROM ods_di_store
-    """
+    sql = "SELECT DISTINCT city FROM ods_di_store"
     result = clickhouse_client.query_data_with_raw_sql(sql)
-    cities = [r[0] for r in result]
+    cities = []
+    for r in result:
+        city_name = r[0]
+        if city_name is not None and city_name != '':
+            cities.append(city_name)
     logging.info(cities)
     logging.info("获取城市列表完成!")
     return cities
 
 
 # 条件查询
-def get_data(city_list):
+def get_data(cities):
     logging.info("根据城市列表获取指定数据集")
-    for cityname in city_list:
+    for cityname in cities:
         try:
             if cityname is None:
                 continue
@@ -180,7 +200,7 @@ def get_data(city_list):
             filters = {'city': cityname}
             data = clickhouse_client.query_data("ods_di_store", columns=columns, filters=filters)
             data_df = pd.DataFrame(data, columns=['id', 'name', 'city'])
-            data_df.to_csv(str(cityname) + '.csv')
+            data_df.to_csv('/home/DI/zhouzx/code/classify_label/data/' + str(cityname) + '.csv')
         except Exception as e:
             print(str(cityname) + "出错：" + str(e) + "!")
     logging.info("数据集全部下载完成!")
@@ -190,7 +210,9 @@ def get_data(city_list):
 def upload_predict_data():
     logging.info("预测数据集上传到数据库")
     for index in range(8):
-        data = pd.read_csv('pretic' + str(index) + '.csv', index_col=False)
+        data = pd.read_csv(
+            '/home/DI/zhouzx/code/classify_label/predict_data/predict_CK_category_' + str(index) + '.csv',
+            index_col=False)
         data_dict = data.to_dict(orient='records')
         data_list = [list(row.values()) for row in data_dict]
         clickhouse_client.insert_data(table_name='ods_di_store_labeling', data=data_list)
@@ -199,12 +221,12 @@ def upload_predict_data():
 
 if __name__ == '__main__':
     # sql查询获取城市集合
-    cities = get_cities()
+    # city_list = get_cities()
     # 条件查询划分8个csv文件
-    get_data(cities)
+    # get_data(city_list)
     start1 = time.time()
     # # 加载模型 预测结果
-    rerun_get_CK_file(cities)
+    # rerun_get_CK_file(city_list)
     predict_result_forCK_bert()
     end1 = time.time()
     logging.info('加载模型 预测结果 time: %s minutes' % ((end1 - start1) / 60))
