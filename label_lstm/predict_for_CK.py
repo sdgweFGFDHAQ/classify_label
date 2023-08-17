@@ -16,7 +16,6 @@ from mini_tool import WordSegment, error_callback
 
 warnings.filterwarnings("ignore", category=UserWarning)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
 pretrian_bert_url = "IDEA-CCNL/Erlangshen-DeBERTa-v2-97M-Chinese"
 
 
@@ -51,7 +50,7 @@ def set_file_standard_data(city_list, part_i):
         path_city = SP.PATH_ZZX_DATA + city + '.csv'
         path_part = SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv'
         if os.path.exists(path_city):
-            csv_data = pd.read_csv(path_city, usecols=['id', 'name', 'city'], keep_default_na=False)
+            csv_data = pd.read_csv(path_city, usecols=['id', 'name'], keep_default_na=False)
             # 得到标准数据
             segment = WordSegment()
             csv_data['cut_name'] = csv_data['name'].apply(segment.cut_word)
@@ -59,11 +58,11 @@ def set_file_standard_data(city_list, part_i):
             csv_data = csv_data[csv_data['cut_name'].notna()]
             if os.path.exists(path_part) and os.path.getsize(path_part):
                 csv_data.to_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv',
-                                columns=['id', 'name', 'city', 'cut_name'],
+                                columns=['id', 'name', 'cut_name'],
                                 mode='a', header=False)
             else:
                 csv_data.to_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv',
-                                columns=['id', 'name', 'city', 'cut_name'],
+                                columns=['id', 'name', 'cut_name'],
                                 mode='w')
 
 
@@ -90,21 +89,21 @@ def get_city_forCK(city_list):
         path_city = SP.PATH_ZZX_DATA + city + '.csv'
         if os.path.exists(path_city):
             csv_data = pd.read_csv(path_city,
-                                   usecols=['id', 'name', 'city'])
+                                   usecols=['id', 'name'])
             # 得到标准数据
             segment = WordSegment()
             csv_data['cut_name'] = csv_data['name'].apply(segment.cut_word)
             if os.path.exists(path_part) and os.path.getsize(path_part):
                 csv_data.to_csv(path_part,
-                                columns=['id', 'name', 'category3_new', 'cut_name'], mode='a', header=False)
+                                columns=['id', 'name', 'category1_new', 'cut_name'], mode='a', header=False)
             else:
                 csv_data.to_csv(path_part,
-                                columns=['id', 'name', 'category3_new', 'cut_name'], mode='w')
+                                columns=['id', 'name', 'category1_new', 'cut_name'], mode='w')
 
 
 def predict_result(df, dataloder, model, idx2lab, part_i):
     # 进度条
-    progress_bar = tqdm(total=len(dataloder), desc='Predicting')
+    # progress_bar = tqdm(total=len(dataloder), desc='Predicting')
 
     pre_lists = list()
     # 將 model 的模式设定为 eval，固定model的参数
@@ -121,15 +120,14 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
             pre_lists.extend(pre_label)
 
             # 更新进度条
-            progress_bar.update(1)
+            # progress_bar.update(1)
     # 关闭进度条
-    progress_bar.close()
+    # progress_bar.close()
     cate_lists = []
     for ind in pre_lists:
         cate_lists.append(idx2lab[ind.item()])
     result = pd.DataFrame(
-        {'store_id': df['id'], 'name': df['name'], 'city': df['city'],
-         'predict_category': cate_lists})
+        {'id': df['id'], 'name': df['name'], 'predict_category': cate_lists})
     result.to_csv(SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv')
 
 
