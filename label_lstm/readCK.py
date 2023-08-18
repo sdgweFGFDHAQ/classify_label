@@ -3,17 +3,17 @@ import math
 import sys
 import time
 
-from absl import app, flags, logging
+from absl import app, flags
 from clickhouse_sqlalchemy import make_session, get_declarative_base, engines
 from sqlalchemy import create_engine, Column, MetaData, types, text
 import pandas as pd
+import logging
 
 from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 
 # FLAGS = flags.FLAGS
-logging.get_absl_handler().use_absl_log_file("readCK.log")
-logging.get_absl_handler().setFormatter(logging.PythonFormatter())
-logging.get_absl_handler().setLevel(logging.INFO)
+logging.basicConfig(filename="log.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
+                    datefmt="%d-%M-%Y %H:%M:%S", level=logging.INFO)
 
 # flags.DEFINE_string(
 #     'data_path', '/home/DI/zhouzx/code/classify_label/data/',
@@ -49,9 +49,9 @@ class ClickhouseClient:
 
     def create_table(self, table_name):
         class Rate(self._base):
-            id = Column(types.String)
+            pk = Column(types.Integer, primary_key=True, autoincrement=True)
+            id = Column(types.String, primary_key=False)
             name = Column(types.String)
-            city = Column(types.String)
             predict_category = Column(types.String)
 
             __tablename__ = table_name
@@ -166,9 +166,8 @@ def upload_predict_data():
     for index in range(8):
         data = pd.read_csv(
             predict_path + 'predict_CK_category_' + str(index) + '.csv',
-            usecols=['store_id', 'name', 'predict_category'],
+            usecols=['id', 'name', 'predict_category'],
             index_col=False)
-        data = data.rename(columns={'store_id': 'id'})
         data_dict = data.to_dict(orient='records')
 
         # data_list = [list(row.values()) for row in data_dict]
