@@ -12,7 +12,7 @@ import logging
 from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 
 # FLAGS = flags.FLAGS
-logging.basicConfig(filename="log.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
+logging.basicConfig(filename="readCK.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
                     datefmt="%d-%M-%Y %H:%M:%S", level=logging.INFO)
 
 # flags.DEFINE_string(
