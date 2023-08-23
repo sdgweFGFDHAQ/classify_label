@@ -159,10 +159,10 @@ def predict_result_forCK_bert():
         df = df[(df['cut_name'].notna() & df['cut_name'].notnull())]
         # 处理特征
         dataset = MyDataset(df)
-        pre_dataloder = DataLoader(dataset=dataset, batch_size=512, shuffle=False, drop_last=False)
+        pre_dataloder = DataLoader(dataset=dataset, batch_size=SP.BATCH_SIZE, shuffle=False, drop_last=False)
 
         idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
-        idx2lab[-1] = '其他'
+        idx2lab[-1] = SP.UNKNOWN_CATEGORY
 
         predict_result(df, pre_dataloder, lstm_model, idx2lab, part_i)
         print("predict_CK_category_{} 写入完成".format(part_i))

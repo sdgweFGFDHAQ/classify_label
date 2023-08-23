@@ -8,10 +8,11 @@ class StaticParameter:
     EMBEDDING_DIM = 120
     # 全国数据分段跑
     SEGMENT_NUMBER = 8
-    # 抽样数量
-    DATA_NUMBER = 50000
-    # 标准广州数据
-    PATH_TRAIN = 'standard_store_'
+    # batch_size大小
+    BATCH_SIZE = 512
+    # 不能被划分到现有标签体系的数据类别
+    UNKNOWN_CATEGORY = ''
+
     # Linux服务器参数
     PATH_ZZX = '/home/data/temp/zhouzx'
     PATH_ZZX_DATA = '/home/DI/zhouzx/code/classify_label/data/'

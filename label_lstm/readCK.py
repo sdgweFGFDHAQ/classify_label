@@ -63,7 +63,7 @@ class ClickhouseClient:
             Rate.__table__.create()
         return Rate
 
-    def insert_data(self, table, data, batch_size=1000000):
+    def insert_data(self, table, data, batch_size=10000):
         session = self._session
         total_rows = len(data)
         num_batches = math.floor(total_rows / batch_size)  # 计算总批次数
@@ -178,12 +178,12 @@ def upload_predict_data():
 
 if __name__ == '__main__':
     # sql查询获取城市集合
-    city_list = get_cities()
+    # city_list = get_cities()
     # 条件查询划分8个csv文件
-    get_data(city_list)
+    # get_data(city_list)
     start1 = time.time()
     # # 加载模型 预测结果
-    rerun_get_CK_file(city_list)
+    # rerun_get_CK_file(city_list)
     predict_result_forCK_bert()
     end1 = time.time()
     logging.info('加载模型 预测结果 time: %s minutes' % ((end1 - start1) / 60))
