@@ -15,7 +15,7 @@ from torch import optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from transformers import AutoTokenizer, AutoModel, BertForSequenceClassification, BertConfig
 
-from model_bert import BertLSTMNet, BertLSTMNet_2
+from model_bert_old import BertLSTMNet, BertLSTMNet_2
 from preprocess_data import Preprocess
 from global_parameter import StaticParameter as SP
 from mini_tool import WordSegment, error_callback

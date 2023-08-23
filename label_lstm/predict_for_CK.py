@@ -11,7 +11,7 @@ import warnings
 from transformers import AutoModel, AutoTokenizer
 
 from global_parameter import StaticParameter as SP
-from model_bert import BertLSTMNet
+from model_bert import BertLSTMNet_1
 from mini_tool import WordSegment, error_callback
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -104,8 +104,7 @@ def get_city_forCK(city_list):
 def predict_result(df, dataloder, model, idx2lab, part_i):
     # 进度条
     # progress_bar = tqdm(total=len(dataloder), desc='Predicting')
-
-    pre_lists = list()
+    pre_ind_lists, pre_max_value = list(), list()
     # 將 model 的模式设定为 eval，固定model的参数
     model.eval()
     with torch.no_grad():
@@ -116,18 +115,23 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
             # 2. 计算输出
             outputs = model(inputs, masks)
             outputs = outputs.squeeze(1)
-            pre_label = outputs.argmax(axis=1)
-            pre_lists.extend(pre_label)
+            pre_value, pre_label = torch.max(outputs, dim=1)
+            pre_ind_lists.extend(pre_label)
+            pre_max_value.extend(pre_value)
 
             # 更新进度条
             # progress_bar.update(1)
     # 关闭进度条
     # progress_bar.close()
     cate_lists = []
-    for ind in pre_lists:
-        cate_lists.append(idx2lab[ind.item()])
+    max_value_lists = []
+    for ind in range(len(pre_ind_lists)):
+        pre_ind = pre_ind_lists[ind]
+        pre_value = pre_max_value[ind]
+        cate_lists.append(idx2lab[pre_ind.item()] if pre_value > 0.72 else idx2lab[-1])
+        max_value_lists.append(pre_value.item())
     result = pd.DataFrame(
-        {'id': df['id'], 'name': df['name'], 'predict_category': cate_lists})
+        {'id': df['id'], 'name': df['name'], 'predict_category': cate_lists, 'max_value': max_value_lists})
     result.to_csv(SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv')
 
 
@@ -140,15 +144,15 @@ def predict_result_forCK_bert():
     cat_df = pd.read_csv('category_to_id.csv')
     bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
     category_number = cat_df.shape[0]  # 78
-    lstm_model = BertLSTMNet(
+    lstm_model = BertLSTMNet_1(
         bert_embedding=bert_layer,
         input_dim=768,
         hidden_dim=128,
         num_classes=category_number,
         num_layers=2
     ).to(device)
-    lstm_model.load_state_dict(torch.load("best_lstm_bert.pth"))
-    # lstm_model = torch.load('best_lstm_bert_3.model')
+    # lstm_model.load_state_dict(torch.load("best_lstm_bert.pth"))
+    lstm_model = torch.load('best_lstm_bert_6.model')
 
     for part_i in range(SP.SEGMENT_NUMBER):
         df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv')
@@ -158,6 +162,7 @@ def predict_result_forCK_bert():
         pre_dataloder = DataLoader(dataset=dataset, batch_size=512, shuffle=False, drop_last=False)
 
         idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
+        idx2lab[-1] = '其他'
 
         predict_result(df, pre_dataloder, lstm_model, idx2lab, part_i)
         print("predict_CK_category_{} 写入完成".format(part_i))
