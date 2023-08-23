@@ -18,6 +18,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 pretrian_bert_url = SP.PRETRAIN_BERT_URL
 load_bert_model = SP.BEST_BERT_MODEL
+chunksize = 1000000
+
 
 class MyDataset(Dataset):
     def __init__(self, dataframe):
@@ -132,7 +134,12 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
         max_value_lists.append(pre_value.item())
     result = pd.DataFrame(
         {'id': df['id'], 'name': df['name'], 'predict_category': cate_lists, 'max_value': max_value_lists})
-    result.to_csv(SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv')
+
+    path_part = SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv'
+    if os.path.exists(path_part) and os.path.getsize(path_part):
+        result.to_csv(path_part, mode='a', header=False)
+    else:
+        result.to_csv(path_part, mode='w')
 
 
 def predict_result_forCK_bert():
@@ -142,8 +149,11 @@ def predict_result_forCK_bert():
             open(path_pre, "r+").truncate()
 
     cat_df = pd.read_csv('category_to_id.csv')
-    bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
     category_number = cat_df.shape[0]  # 78
+    idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
+    idx2lab[-1] = SP.UNKNOWN_CATEGORY
+
+    bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
     lstm_model = BertLSTMNet_1(
         bert_embedding=bert_layer,
         input_dim=768,
@@ -155,17 +165,16 @@ def predict_result_forCK_bert():
     lstm_model = torch.load(load_bert_model)
 
     for part_i in range(SP.SEGMENT_NUMBER):
-        df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv')
-        df = df[(df['cut_name'].notna() & df['cut_name'].notnull())]
-        # 处理特征
-        dataset = MyDataset(df)
-        pre_dataloder = DataLoader(dataset=dataset, batch_size=SP.BATCH_SIZE, shuffle=False, drop_last=False)
+        df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv', chunksize=chunksize)
+        for df_i in df:
+            df_i = df_i[(df_i['cut_name'].notna() & df_i['cut_name'].notnull())]
+            # 处理特征
+            dataset = MyDataset(df_i)
+            pre_dataloder = DataLoader(dataset=dataset, batch_size=SP.BATCH_SIZE, shuffle=False, drop_last=False)
 
-        idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
-        idx2lab[-1] = SP.UNKNOWN_CATEGORY
+            predict_result(df_i, pre_dataloder, lstm_model, idx2lab, part_i)
 
-        predict_result(df, pre_dataloder, lstm_model, idx2lab, part_i)
-        print("predict_CK_category_{} 写入完成".format(part_i))
+            print("predict_CK_category_{} 写入完成".format(part_i))
 
 
 if __name__ == '__main__':
