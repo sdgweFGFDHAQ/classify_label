@@ -17,7 +17,7 @@ class StaticParameter:
     # 设置Embedding层的维度
     EMBEDDING_DIM = 120
     # batch_size大小
-    BATCH_SIZE = 512
+    BATCH_SIZE = 256
 
     # Linux服务器参数
     PATH_ZZX = '/home/data/temp/zhouzx'
