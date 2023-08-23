@@ -16,8 +16,8 @@ from mini_tool import WordSegment, error_callback
 
 warnings.filterwarnings("ignore", category=UserWarning)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-pretrian_bert_url = "IDEA-CCNL/Erlangshen-DeBERTa-v2-97M-Chinese"
-
+pretrian_bert_url = SP.PRETRAIN_BERT_URL
+load_bert_model = SP.BEST_BERT_MODEL
 
 class MyDataset(Dataset):
     def __init__(self, dataframe):
@@ -152,7 +152,7 @@ def predict_result_forCK_bert():
         num_layers=2
     ).to(device)
     # lstm_model.load_state_dict(torch.load("best_lstm_bert.pth"))
-    lstm_model = torch.load('best_lstm_bert_6.model')
+    lstm_model = torch.load(load_bert_model)
 
     for part_i in range(SP.SEGMENT_NUMBER):
         df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv')
