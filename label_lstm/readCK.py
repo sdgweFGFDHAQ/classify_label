@@ -4,11 +4,12 @@ import sys
 import time
 
 from absl import app, flags
-from clickhouse_sqlalchemy import make_session, get_declarative_base, engines
-from sqlalchemy import create_engine, Column, MetaData, types, text
+from clickhouse_sqlalchemy import select, make_session, get_declarative_base, engines
+from sqlalchemy import create_engine, Column, MetaData, types, text, distinct, column
 import pandas as pd
 import logging
 
+from global_parameter import StaticParameter as SP
 from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 
 # FLAGS = flags.FLAGS
@@ -52,6 +53,7 @@ class ClickhouseClient:
             pk = Column(types.Integer, primary_key=True, autoincrement=True)
             id = Column(types.String, primary_key=False)
             name = Column(types.String)
+            state = Column(types.String)
             predict_category = Column(types.String)
 
             __tablename__ = table_name
@@ -146,13 +148,42 @@ def get_data(cities):
             if cityname is None:
                 continue
             logging.info("开始执行sql")
-            sql = "SELECT id, name FROM ods_di_store_classify WHERE category1_new='' and city='{0}'" \
+            sql = "SELECT DISTINCT id, name FROM ods_di_store_classify WHERE category1_new='' and city='{0}'" \
                 .format(cityname)
             data = clickhouse_client.query_data_with_raw_sql(sql)
             data_df = pd.DataFrame(data, columns=['id', 'name'])
             data_df.to_csv(data_path + str(cityname) + '.csv')
         except Exception as e:
             logging.info(str(cityname) + "出错：" + str(e) + "!")
+    logging.info("数据集全部下载完成!")
+
+
+def get_data_offset(file_prefix, batch_size=1000000):
+    logging.info("根据偏移获取定量数据集")
+    query = "SELECT DISTINCT id, name, state FROM ods_di_store_classify WHERE category1_new=''"
+
+    offset = 0
+    batch_num = 0
+    while True:
+        # 构建带有偏移和限制的查询语句
+        sql = f"{query} LIMIT {batch_size} OFFSET {offset}" if offset != 0 else f"{query} LIMIT {batch_size}"
+        # 执行查询，将结果保存为DataFrame
+        print(sql)
+        data = clickhouse_client.query_data_with_raw_sql(sql)
+
+        # 如果没有数据返回，跳出循环
+        if not data:
+            break
+        data_df = pd.DataFrame(data, columns=['id', 'name', 'state'])
+        data_df.to_csv(data_path + file_prefix + str(batch_num) + '.csv')
+
+        # 更新偏移和批次号
+        offset += batch_size
+        batch_num += 1
+        if batch_num == 3:
+            breakpoint()
+    logging.info("csv文件数量batch_num={}".format(batch_num + 1))
+    SP.SEGMENT_NUMBER = batch_num + 1
     logging.info("数据集全部下载完成!")
 
 
@@ -163,10 +194,10 @@ def upload_predict_data():
     table = clickhouse_client.create_table(table_name=upload_table_name)
     # 清空数据表
     clickhouse_client.clear_data(table=table)
-    for index in range(8):
+    for index in range(SP.SEGMENT_NUMBER):
         data = pd.read_csv(
             predict_path + 'predict_CK_category_' + str(index) + '.csv',
-            usecols=['id', 'name', 'predict_category'],
+            usecols=['id', 'name', 'state', 'threshold_category'],
             index_col=False)
         data_dict = data.to_dict(orient='records')
 
@@ -181,6 +212,8 @@ if __name__ == '__main__':
     # city_list = get_cities()
     # 条件查询划分8个csv文件
     # get_data(city_list)
+    ## 全新方法 每查询100w条就保存为一个csv
+    get_data_offset(file_prefix='store_CK_data_')
     start1 = time.time()
     # # 加载模型 预测结果
     # rerun_get_CK_file(city_list)

@@ -29,7 +29,7 @@ class MyDataset(Dataset):
     def load_data(self, df):
         # 从数据路径加载数据
         # 返回数据列表，每个元素是一个样本
-        name_lists = df['cut_name'].tolist()
+        name_lists = df['name'].tolist()
         return name_lists
 
     def __len__(self):
@@ -125,21 +125,41 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
             # progress_bar.update(1)
     # 关闭进度条
     # progress_bar.close()
-    cate_lists = []
+    cate_lists, threshold_cate_lists = [], []
     max_value_lists = []
     for ind in range(len(pre_ind_lists)):
         pre_ind = pre_ind_lists[ind]
         pre_value = pre_max_value[ind]
-        cate_lists.append(idx2lab[pre_ind.item()] if pre_value > 0.72 else idx2lab[-1])
+        cate_lists.append(idx2lab[pre_ind.item()])
+        threshold_cate_lists.append(idx2lab[pre_ind.item()] if pre_value > 0.99 else idx2lab[-1])
         max_value_lists.append(pre_value.item())
     result = pd.DataFrame(
-        {'id': df['id'], 'name': df['name'], 'predict_category': cate_lists, 'max_value': max_value_lists})
+        {'id': df['id'], 'name': df['name'], 'state': df['state'], 'category1_new': df['category1_new'],
+         'predict_category': cate_lists, 'threshold_category': threshold_cate_lists, 'max_value': max_value_lists})
 
     path_part = SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv'
     if os.path.exists(path_part) and os.path.getsize(path_part):
         result.to_csv(path_part, mode='a', header=False)
     else:
         result.to_csv(path_part, mode='w')
+
+
+def predict_csv(pi, model, idx2lab):
+    # pool = Pool(processes=4)
+    # for part_i in range(6, SP.SEGMENT_NUMBER):
+    #     pool.apply_async(predict_csv, args=(part_i, lstm_model, idx2lab), error_callback=error_callback)
+    # pool.close()
+    # pool.join()
+    df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(pi) + '.csv', chunksize=chunksize)
+    for df_i in df:
+        df_i = df_i[(df_i['cut_name'].notna() & df_i['cut_name'].notnull())]
+        # 处理特征
+        dataset = MyDataset(df_i)
+        pre_dataloder = DataLoader(dataset=dataset, batch_size=SP.BATCH_SIZE, shuffle=False, drop_last=False)
+
+        predict_result(df_i, pre_dataloder, model, idx2lab, pi)
+
+    print("predict_CK_category_{} 写入完成".format(pi))
 
 
 def predict_result_forCK_bert():
@@ -165,9 +185,9 @@ def predict_result_forCK_bert():
     lstm_model = torch.load(load_bert_model)
 
     for part_i in range(SP.SEGMENT_NUMBER):
-        df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(part_i) + '.csv', chunksize=chunksize)
+        df = pd.read_csv(SP.PATH_ZZX_DATA + 'store_CK_data_' + str(part_i) + '.csv', chunksize=chunksize)
         for df_i in df:
-            df_i = df_i[(df_i['cut_name'].notna() & df_i['cut_name'].notnull())]
+            # df_i = df_i[(df_i['cut_name'].notna() & df_i['cut_name'].notnull())]
             # 处理特征
             dataset = MyDataset(df_i)
             pre_dataloder = DataLoader(dataset=dataset, batch_size=SP.BATCH_SIZE, shuffle=False, drop_last=False)
