@@ -134,8 +134,11 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
         threshold_cate_lists.append(idx2lab[pre_ind.item()] if pre_value > 0.99 else idx2lab[-1])
         max_value_lists.append(pre_value.item())
     result = pd.DataFrame(
-        {'id': df['id'], 'name': df['name'], 'state': df['state'], 'category1_new': df['category1_new'],
+        {'id': df['id'], 'name': df['name'], 'state': df['state'],
          'predict_category': cate_lists, 'threshold_category': threshold_cate_lists, 'max_value': max_value_lists})
+    # result = pd.DataFrame(
+    #     {'id': df['id'], 'name': df['name'], 'state': df['state'], 'category1_new': df['category1_new'],
+    #      'predict_category': cate_lists, 'threshold_category': threshold_cate_lists, 'max_value': max_value_lists})
 
     path_part = SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv'
     if os.path.exists(path_part) and os.path.getsize(path_part):
@@ -187,7 +190,7 @@ def predict_result_forCK_bert():
     for part_i in range(SP.SEGMENT_NUMBER):
         df = pd.read_csv(SP.PATH_ZZX_DATA + 'store_CK_data_' + str(part_i) + '.csv', chunksize=chunksize)
         for df_i in df:
-            # df_i = df_i[(df_i['cut_name'].notna() & df_i['cut_name'].notnull())]
+            df_i = df_i[(df_i['name'].notna() & df_i['name'].notnull())]
             # 处理特征
             dataset = MyDataset(df_i)
             pre_dataloder = DataLoader(dataset=dataset, batch_size=SP.BATCH_SIZE, shuffle=False, drop_last=False)

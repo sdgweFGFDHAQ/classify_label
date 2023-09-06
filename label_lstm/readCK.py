@@ -35,7 +35,7 @@ logging.basicConfig(filename="readCK.log", filemode="w", format="%(asctime)s %(n
 data_path = '/home/DI/zhouzx/code/classify_label/data/'
 predict_path = '/home/DI/zhouzx/code/classify_label/predict_data/'
 download_table_name = 'ods_di_store_classify'
-upload_table_name = 'ods_di_store_labeling'
+upload_table_name = 'ods_di_store_labeling_local'
 upload_batch_size = 100000
 
 
@@ -180,8 +180,6 @@ def get_data_offset(file_prefix, batch_size=1000000):
         # 更新偏移和批次号
         offset += batch_size
         batch_num += 1
-        if batch_num == 3:
-            breakpoint()
     logging.info("csv文件数量batch_num={}".format(batch_num + 1))
     SP.SEGMENT_NUMBER = batch_num + 1
     logging.info("数据集全部下载完成!")
@@ -199,6 +197,8 @@ def upload_predict_data():
             predict_path + 'predict_CK_category_' + str(index) + '.csv',
             usecols=['id', 'name', 'state', 'threshold_category'],
             index_col=False)
+        # 调整列名
+        data.rename(columns={'threshold_category': 'predict_category'}, inplace=True)
         data_dict = data.to_dict(orient='records')
 
         # data_list = [list(row.values()) for row in data_dict]
@@ -213,11 +213,11 @@ if __name__ == '__main__':
     # 条件查询划分8个csv文件
     # get_data(city_list)
     ## 全新方法 每查询100w条就保存为一个csv
-    get_data_offset(file_prefix='store_CK_data_')
+    # get_data_offset(file_prefix='store_CK_data_')
     start1 = time.time()
     # # 加载模型 预测结果
     # rerun_get_CK_file(city_list)
-    predict_result_forCK_bert()
+    # predict_result_forCK_bert()
     end1 = time.time()
     logging.info('加载模型 预测结果 time: %s minutes' % ((end1 - start1) / 60))
     # # 分类算法预测类别，建表并上传数据

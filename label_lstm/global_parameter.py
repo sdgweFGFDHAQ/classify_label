@@ -4,7 +4,7 @@ class StaticParameter:
     MAX_WORDS_NUM = 120000
 
     # 全国数据分段跑
-    SEGMENT_NUMBER = 8
+    SEGMENT_NUMBER = 11
     # 不能被划分到现有标签体系的数据类别
     UNKNOWN_CATEGORY = ''
     # 预训练bert模型
