@@ -15,8 +15,7 @@ from torch import optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from transformers import AutoTokenizer, AutoModel, BertForSequenceClassification, BertConfig
 
-from model_bert_old import BertLSTMNet, BertLSTMNet_2
-from preprocess_data import Preprocess
+from model_bert import BertLSTMNet_1, BertLSTMNet_2
 from global_parameter import StaticParameter as SP
 from mini_tool import WordSegment, error_callback
 
@@ -232,7 +231,7 @@ def search_best_dataset(dataset, embedding, category_count):
 
         print('==================第{}折================'.format(fold + 1))
         k += 1
-        model = BertLSTMNet(
+        model = BertLSTMNet_1(
             bert_embedding=embedding,
             input_dim=768,
             hidden_dim=128,
@@ -255,7 +254,7 @@ def search_best_dataset(dataset, embedding, category_count):
 
 
 def search_best_model(train_set, test_set, embedding, category_count):
-    model = BertLSTMNet(
+    model = BertLSTMNet_1(
         bert_embedding=embedding,
         input_dim=768,
         hidden_dim=128,
@@ -416,7 +415,7 @@ def rerun_predict_result():
     global category_number
     tokenizer = AutoTokenizer.from_pretrained(pretrian_bert_url)
     bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
-    lstm_model = BertLSTMNet(
+    lstm_model = BertLSTMNet_1(
         bert_embedding=bert_layer,
         input_dim=768,
         hidden_dim=128,

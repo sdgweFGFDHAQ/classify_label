@@ -213,16 +213,16 @@ if __name__ == '__main__':
     # 条件查询划分8个csv文件
     # get_data(city_list)
     ## 全新方法 每查询100w条就保存为一个csv
-    # get_data_offset(file_prefix='store_CK_data_')
+    get_data_offset(file_prefix='store_CK_data_')
     start1 = time.time()
     # # 加载模型 预测结果
     # rerun_get_CK_file(city_list)
-    # predict_result_forCK_bert()
+    predict_result_forCK_bert()
     end1 = time.time()
     logging.info('加载模型 预测结果 time: %s minutes' % ((end1 - start1) / 60))
     # # 分类算法预测类别，建表并上传数据
     upload_predict_data()
-# nohup python -u readCK.py > ck_log.log 2>&1 &
+# nohup python -u readCK.py > /dev/null 2>&1 &
 
 # 插入数据
 # 将 DataFrame 数据转换为字典列表
