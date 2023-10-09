@@ -4,7 +4,6 @@ import warnings
 import logging
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from multiprocessing import Pool
 import torch
@@ -13,15 +12,15 @@ from tensorboardX import SummaryWriter
 from torch import nn
 from torch import optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
-from transformers import AutoTokenizer, AutoModel, BertForSequenceClassification, BertConfig
+from transformers import AutoTokenizer, AutoModel
 
-from model_bert import BertLSTMNet_1, BertLSTMNet_2
+from model_bert import BertLSTMNet_1
 from global_parameter import StaticParameter as SP
 from mini_tool import WordSegment, error_callback
 
 warnings.filterwarnings("ignore", category=UserWarning)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-writer = SummaryWriter('/home/data/temp/zhouzx/classify_label/logs/')
+writer = SummaryWriter('/home/DI/zhouzx/code/classify_label/logs/')
 
 pretrian_bert_url = "IDEA-CCNL/Erlangshen-DeBERTa-v2-97M-Chinese"
 category_number = 0
@@ -40,23 +39,22 @@ def set_file_standard_data(city, part_i):
     if os.path.exists(path_city):
         csv_data = pd.read_csv(path_city, usecols=['id', 'name', 'category1_new'])
         # 得到标准数据
+        use_columns = ['id', 'name', 'category1_new', 'cut_name']
         segment = WordSegment()
         csv_data['cut_name'] = csv_data['name'].apply(segment.cut_word)
         # 过滤非中文店名导致的'cut_name'=nan
         csv_data = csv_data[csv_data['cut_name'].notna()]
         if os.path.exists(path_part) and os.path.getsize(path_part):
             csv_data.to_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_store_' + str(part_i) + '.csv',
-                            columns=['id', 'name', 'category1_new', 'cut_name'],
-                            mode='a', header=False)
+                            columns=use_columns, mode='a', header=False)
         else:
             csv_data.to_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_store_' + str(part_i) + '.csv',
-                            columns=['id', 'name', 'category1_new', 'cut_name'],
-                            mode='w')
+                            columns=use_columns, mode='w')
 
 
 def typicalsamling(group, threshold):
     count = len(group.index)
-    percent = 0.2  # 超参数，考虑缓解样本不平衡但不过多增加训练集 选择的比例
+    percent = 0.5  # 超参数，考虑缓解样本不平衡但不过多增加训练集 选择的比例
     floor = round(percent * threshold)  # 最少样本数
     if count > threshold:
         return group.sample(n=threshold, random_state=23)
@@ -70,12 +68,13 @@ def typicalsamling(group, threshold):
 
 
 def random_get_trainset(is_labeled=True, labeled_is_all=False):
-    standard_df = pd.DataFrame(columns=['id', 'name', 'category1_new', 'cut_name'])
+    use_columns = ['id', 'name', 'category1_new', 'cut_name']
+    standard_df = pd.DataFrame(columns=use_columns)
     result_path = 'standard_store_data.csv'
     all_fix = ''
     for i in range(SP.SEGMENT_NUMBER):
         path = SP.PATH_ZZX_STANDARD_DATA + 'standard_store_' + str(i) + '.csv'
-        df_i = pd.read_csv(path, usecols=['id', 'name', 'category1_new', 'cut_name'], keep_default_na=False)
+        df_i = pd.read_csv(path, usecols=use_columns, keep_default_na=False)
         if is_labeled:
             df_i = df_i[df_i['category1_new'] != '']
             all_fix = '_labeled'
@@ -98,8 +97,40 @@ def random_get_trainset(is_labeled=True, labeled_is_all=False):
     standard_df.to_csv(SP.PATH_ZZX_STANDARD_DATA + result_path, index=False)
 
 
-def get_dataset():
-    gz_df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_store_data.csv')
+# 在训练集中加入'其他'类别的数据
+def add_other_category(standard_path='standard_store_data.csv', kw_path='standard_data_other_category.csv',
+                       save_path='standard_dataset.csv'):
+    prefix = SP.PATH_ZZX_STANDARD_DATA
+    use_columns = ['id', 'name', 'category1_new']
+
+    # 训练集
+    standard_df = pd.read_csv(prefix + standard_path, usecols=use_columns + ['cut_name'], keep_default_na=False)
+
+    # 不在分类范围的'其他'集-根据关键词查找
+    kw_df = pd.read_csv(prefix + kw_path, usecols=use_columns, keep_default_na=False)
+    kw_df['category1_new'] = '其他'
+    segment = WordSegment()
+    kw_df['cut_name'] = kw_df['name'].apply(segment.cut_word)
+    # 过滤非中文店名导致的'cut_name'=nan
+    kw_df = kw_df[kw_df['cut_name'].notna()]
+
+    temp_df = pd.concat([standard_df, kw_df], axis=0)
+
+    # 人工添加'其他'集
+    ao_df = pd.read_csv(prefix + 'arti_other_category.csv', usecols=use_columns, keep_default_na=False)
+    segment = WordSegment()
+    ao_df['cut_name'] = ao_df['name'].apply(segment.cut_word)
+    ao_df = ao_df[ao_df['cut_name'].notna()]
+    ao_df_copy = pd.concat([ao_df] * 10, ignore_index=True)
+
+    new_df = pd.concat([temp_df, ao_df_copy], axis=0)
+
+    # 合并作为模型训练集
+    new_df.to_csv(prefix + save_path, index=False)
+
+
+def get_dataset(source_csv='standard_dataset.csv'):
+    gz_df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + source_csv)
     print(len(gz_df.index))
 
     category_df = gz_df.drop_duplicates(subset=['category1_new'], keep='first', inplace=False)
@@ -218,39 +249,39 @@ def evaluating(val_loader, model):
     return loss_value, acc_value
 
 
-def search_best_dataset(dataset, embedding, category_count):
-    # 使用k折交叉验证
-    kf_5 = KFold(n_splits=5)
-    k, epochs = 0, 3
-    best_accuracy = 0.
-    best_train, best_test = None, None
-    for fold, (train_idx, val_idx) in enumerate(kf_5.split(dataset)):
-        # data_x, data_y = np.array(data_x), np.array(data_y)
-        train_dataset = torch.utils.data.Subset(dataset, train_idx)
-        val_dataset = torch.utils.data.Subset(dataset, val_idx)
-
-        print('==================第{}折================'.format(fold + 1))
-        k += 1
-        model = BertLSTMNet_1(
-            bert_embedding=embedding,
-            input_dim=768,
-            hidden_dim=128,
-            num_classes=category_count,
-            num_layers=2
-        ).to(device)
-        train_ip = DataLoader(dataset=train_dataset, batch_size=512, shuffle=True, drop_last=True)
-        test_ip = DataLoader(dataset=val_dataset, batch_size=512, shuffle=True, drop_last=False)
-        accuracy_list = list()
-        # run epochs
-        for ep in range(epochs):
-            training(train_ip, model)
-            _, pre_av = evaluating(test_ip, model)
-            accuracy_list.append(round(pre_av, 3))
-        mean_accuracy = np.mean(accuracy_list)
-        if mean_accuracy > best_accuracy:
-            best_accuracy = mean_accuracy
-            best_train, best_test = train_dataset, val_dataset
-    return best_train, best_test
+# def search_best_dataset(dataset, embedding, category_count):
+#     # 使用k折交叉验证
+#     kf_5 = KFold(n_splits=5)
+#     k, epochs = 0, 3
+#     best_accuracy = 0.
+#     best_train, best_test = None, None
+#     for fold, (train_idx, val_idx) in enumerate(kf_5.split(dataset)):
+#         # data_x, data_y = np.array(data_x), np.array(data_y)
+#         train_dataset = torch.utils.data.Subset(dataset, train_idx)
+#         val_dataset = torch.utils.data.Subset(dataset, val_idx)
+#
+#         print('==================第{}折================'.format(fold + 1))
+#         k += 1
+#         model = BertLSTMNet_1(
+#             bert_embedding=embedding,
+#             input_dim=768,
+#             hidden_dim=128,
+#             num_classes=category_count,
+#             num_layers=2
+#         ).to(device)
+#         train_ip = DataLoader(dataset=train_dataset, batch_size=512, shuffle=True, drop_last=True)
+#         test_ip = DataLoader(dataset=val_dataset, batch_size=512, shuffle=True, drop_last=False)
+#         accuracy_list = list()
+#         # run epochs
+#         for ep in range(epochs):
+#             training(train_ip, model)
+#             _, pre_av = evaluating(test_ip, model)
+#             accuracy_list.append(round(pre_av, 3))
+#         mean_accuracy = np.mean(accuracy_list)
+#         if mean_accuracy > best_accuracy:
+#             best_accuracy = mean_accuracy
+#             best_train, best_test = train_dataset, val_dataset
+#     return best_train, best_test
 
 
 def search_best_model(train_set, test_set, embedding, category_count):
@@ -271,8 +302,8 @@ def search_best_model(train_set, test_set, embedding, category_count):
         eval_lv, eval_av = evaluating(test_ip, model)
         if eval_av > best_accuracy:
             best_accuracy = eval_av
-            # torch.save(model, "best_lstm_bert.model")
-            torch.save(model.state_dict(), "best_lstm_bert.pth")
+            torch.save(model, "best_bert_category.model")
+            # torch.save(model.state_dict(), "model/best_lstm_bert.pth")
         writer.add_scalars('acc', {'train_acc': train_av, 'test_acc': eval_av}, global_step=ep)
         writer.add_scalars('loss', {'train_loss': train_lv, 'test_loss': eval_lv}, global_step=ep)
 
@@ -307,75 +338,7 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
 
 # 用于重新切分店名，生成标准文件
 def rerun_get_file():
-    cities = ['江门市', '新乡市', '河源市', '潮州市', '湛江市', '肇庆市', '开封市', '广州市', '安阳市', '茂名市',
-              '南阳市', '焦作市',
-              '漯河市', '深圳市', '韶关市', '驻马店市', '商丘市', '汕头市', '许昌市', '揭阳市', '郑州市', '汕尾市',
-              '惠州市', '平顶山市',
-              '清远市', '济源市', '洛阳市', '周口市', '云浮市', '珠海市', '三门峡市', '鹤壁市', '信阳市', '佛山市',
-              '梅州市', '濮阳市',
-              '徐州市', '宿迁市', '无锡市', '盐城市', '泰州市', '齐齐哈尔市', '常州市', '黑河市', '大庆市', '镇江市',
-              '扬州市', '鸡西市',
-              '苏州市', '七台河市', '大兴安岭地区', '南通市', '鹤岗市', '南京市', '牡丹江市', '佳木斯市', '绥化市',
-              '伊春市', '淮安市',
-              '双鸭山市', '连云港市', '哈尔滨市', '随州市', '恩施土家族苗族自治州', '武汉市', '宜昌市', '杭州市',
-              '黄冈市', '台州市',
-              '温州市', '咸宁市', '鄂州市', '荆门市', '襄阳市', '舟山市', '神农架林区', '宁波市', '丽水市', '黄石市',
-              '孝感市', '十堰市',
-              '天门市', '荆州市', '仙桃市', '湖州市', '潜江市', '定安县', '本溪市', '辽阳市', '屯昌县', '朝阳市',
-              '铁岭市', '锦州市',
-              '阜新市', '儋州市', '临高县', '白沙黎族自治县', '鞍山市', '文昌市', '海口市', '陵水黎族自治县',
-              '保亭黎族苗族自治县',
-              '乐东黎族自治县', '琼海市', '葫芦岛市', '澄迈县', '万宁市', '五指山市', '三亚市', '丹东市', '抚顺市',
-              '大连市', '益阳市',
-              '昌江黎族自治县', '沈阳市', '三沙市', '北京城区', '营口市', '东方市', '盘锦市', '琼中黎族苗族自治县',
-              '景德镇市',
-              '黔南布依族苗族自治州', '中卫市', '南昌市', '石嘴山市', '贵阳市', '黔东南苗族侗族自治州', '九江市',
-              '吴忠市', '六盘水市',
-              '黔西南布依族苗族自治州', '上饶市', '抚州市', '银川市', '新余市', '毕节市', '吉安市', '遵义市', '铜仁市',
-              '安顺市', '宜春市',
-              '鹰潭市', '固原市', '萍乡市', '赣州市', '滨州市', '潍坊市', '聊城市', '济宁市', '济南市', '青岛市',
-              '东营市', '威海市',
-              '枣庄市', '烟台市', '菏泽市', '泰安市', '临沂市', '淄博市', '德州市', '日照市', '乌兰察布市', '保山市',
-              '呼伦贝尔市',
-              '鄂尔多斯市', '普洱市', '玉溪市', '临沧市', '三明市', '漳州市', '呼和浩特市', '曲靖市', '龙岩市',
-              '迪庆藏族自治州', '通辽市',
-              '楚雄彝族自治州', '宁德市', '泉州市', '阿拉善盟', '大理白族自治州', '南平市', '文山壮族苗族自治州',
-              '丽江市', '包头市',
-              '西双版纳傣族自治州', '乌海市', '昭通市', '怒江傈僳族自治州', '莆田市', '巴彦淖尔市', '厦门市',
-              '德宏傣族景颇族自治州', '昆明市',
-              '红河哈尼族彝族自治州', '兴安盟', '福州市', '赤峰市', '锡林郭勒盟', '澳门', '黄山市', '淮北市', '六安市',
-              '宣城市', '合肥市',
-              '铜陵市', '宿州市', '滁州市', '蚌埠市', '马鞍山市', '亳州市', '芜湖市', '阜阳市', '池州市', '安庆市',
-              '淮南市', '沧州市',
-              '保定市', '衡水市', '邢台市', '廊坊市', '邯郸市', '承德市', '秦皇岛市', '张家口市', '唐山市', '石家庄市',
-              '铜川市',
-              '榆林市', '渭南市', '延安市', '汉中市', '宝鸡市', '安康市', '西安市', '咸阳市', '商洛市',
-              '玉树藏族自治州', '海东市',
-              '巴中市', '辽源市', '延边朝鲜族自治州', '四平市', '遂宁市', '凉山彝族自治州', '海西蒙古族藏族自治州',
-              '绵阳市', '海北藏族自治州',
-              '泸州市', '白山市', '达州市', '眉山市', '阿坝藏族羌族自治州', '吉林市', '黄南藏族自治州', '内江市',
-              '海南藏族自治州', '成都市',
-              '广安市', '自贡市', '通化市', '长春市', '白城市', '南充市', '乐山市', '德阳市', '资阳市',
-              '甘孜藏族自治州', '攀枝花市',
-              '宜宾市', '松原市', '广元市', '雅安市', '果洛藏族自治州', '西宁市', '东莞市', '中山市', '湘潭市',
-              '百色市', '玉林市',
-              '怀化市', '防城港市', '河池市', '梧州市', '岳阳市', '郴州市', '钦州市', '崇左市', '常德市', '株洲市',
-              '北海市', '柳州市',
-              '桂林市', '张家界市', '娄底市', '永州市', '湘西土家族苗族自治州', '长沙市', '来宾市', '衡阳市', '邵阳市',
-              '南宁市', '兰州市',
-              '甘南藏族自治州', '金昌市', '酒泉市', '张掖市', '白银市', '嘉峪关市', '武威市', '天水市', '庆阳市',
-              '临夏回族自治州',
-              '陇南市', '平凉市', '定西市', '忻州市', '吕梁市', '阳泉市', '太原市', '长治市', '运城市', '临汾市',
-              '晋城市', '晋中市',
-              '贵港市', '贺州市', '朔州市', '大同市', '上海城区', '日喀则市', '五家渠市', '昌吉回族自治州', '那曲市',
-              '阿里地区',
-              '胡杨河市', '石河子市', '北屯市', '克拉玛依市', '克孜勒苏柯尔克孜自治州', '乌鲁木齐市', '山南市',
-              '阿克苏地区',
-              '博尔塔拉蒙古自治州', '吐鲁番市', '哈密市', '阿拉尔市', '双河市', '可克达拉市', '林芝市', '铁门关市',
-              '喀什地区', '塔城地区',
-              '天津城区', '伊犁哈萨克自治州', '拉萨市', '和田地区', '巴音郭楞蒙古自治州', '阿勒泰地区', '昆玉市',
-              '图木舒克市', '昌都市',
-              '重庆郊县', '重庆城区', '香港', '阳江市', '金华市', '嘉兴市', '衢州市', '绍兴市']
+    cities = SP.CITIES
     # 初始化，清空文件
     for csv_i in range(SP.SEGMENT_NUMBER):
         path_sta = SP.PATH_ZZX_STANDARD_DATA + 'standard_store_' + str(csv_i) + '.csv'
@@ -400,9 +363,9 @@ def rerun_get_model():
     dataset, embedding_matrix, prepro, class_num = get_dataset()
     category_number = class_num
     # 保存最好的模型
-    train_set, test_set = train_test_split(dataset, test_size=0.2)
+    train_set, test_set = train_test_split(dataset, test_size=0.2, random_state=23)
     search_best_model(train_set, test_set, embedding_matrix, class_num)
-    # K折交叉验证(未使用，停用)
+    # K折交叉验证(停用)
     # train_set, test_set = search_best_dataset(dataset, embedding_matrix, class_num)
 
 
@@ -415,15 +378,15 @@ def rerun_predict_result():
     global category_number
     tokenizer = AutoTokenizer.from_pretrained(pretrian_bert_url)
     bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
-    lstm_model = BertLSTMNet_1(
-        bert_embedding=bert_layer,
-        input_dim=768,
-        hidden_dim=128,
-        num_classes=category_number,
-        num_layers=2
-    ).to(device)
-    lstm_model.load_state_dict(torch.load("best_lstm_bert.pth"))
-    # lstm_model = torch.load('best_lstm_bert.model')
+    # lstm_model = BertLSTMNet_1(
+    #     bert_embedding=bert_layer,
+    #     input_dim=768,
+    #     hidden_dim=128,
+    #     num_classes=category_number,
+    #     num_layers=2
+    # ).to(device)
+    # lstm_model.load_state_dict(torch.load("model/best_lstm_bert.pth"))
+    lstm_model = torch.load('best_bert_category.model')
     for part_i in range(SP.SEGMENT_NUMBER):
         df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_store_' + str(part_i) + '.csv')
         df = df[(df['cut_name'].notna() & df['cut_name'].notnull())]
@@ -467,6 +430,7 @@ if __name__ == '__main__':
     print('rerun_get_file time: %s minutes' % ((end0 - start0) / 60))
     # 2 随机抽取带标签训练集
     random_get_trainset(is_labeled=True, labeled_is_all=False)
+    add_other_category()
     # 3 划分合适的训练集测试集，保存训练模型
     start1 = time.time()
     rerun_get_model()
@@ -474,7 +438,7 @@ if __name__ == '__main__':
     print('rerun_get_model time: %s minutes' % ((end1 - start1) / 60))
     # # 4 用于重新预测打标，生成预测文件
     start2 = time.time()
-    rerun_predict_result()
+    # rerun_predict_result()
     end2 = time.time()
     print('rerun_predict_result time: %s minutes' % ((end2 - start2) / 60))
     # 绘制收敛次数图像

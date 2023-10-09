@@ -13,7 +13,7 @@ from global_parameter import StaticParameter as SP
 from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 
 # FLAGS = flags.FLAGS
-logging.basicConfig(filename="readCK.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
+logging.basicConfig(filename="logging.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
                     datefmt="%d-%M-%Y %H:%M:%S", level=logging.INFO)
 
 # flags.DEFINE_string(
@@ -212,7 +212,7 @@ if __name__ == '__main__':
     # city_list = get_cities()
     # 条件查询划分8个csv文件
     # get_data(city_list)
-    ## 全新方法 每查询100w条就保存为一个csv
+    # 全新方法 每查询100w条就保存为一个csv
     get_data_offset(file_prefix='store_CK_data_')
     start1 = time.time()
     # # 加载模型 预测结果
