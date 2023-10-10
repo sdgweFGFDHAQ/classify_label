@@ -180,8 +180,8 @@ def get_data_offset(file_prefix, batch_size=1000000):
         # 更新偏移和批次号
         offset += batch_size
         batch_num += 1
-    logging.info("csv文件数量batch_num={}".format(batch_num + 1))
-    SP.SEGMENT_NUMBER = batch_num + 1
+    logging.info("csv文件数量batch_num={}".format(batch_num))
+    SP.SEGMENT_NUMBER = batch_num
     logging.info("数据集全部下载完成!")
 
 
