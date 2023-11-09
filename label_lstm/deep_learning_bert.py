@@ -421,27 +421,4 @@ def draw_trend(history):
     plt.legend()
     plt.show()
 
-
-if __name__ == '__main__':
-    start0 = time.time()
-    # 1 用于重新切分店名，生成标准文件
-    # rerun_get_file()
-    end0 = time.time()
-    print('rerun_get_file time: %s minutes' % ((end0 - start0) / 60))
-    # 2 随机抽取带标签训练集
-    random_get_trainset(is_labeled=True, labeled_is_all=False)
-    add_other_category()
-    # 3 划分合适的训练集测试集，保存训练模型
-    start1 = time.time()
-    rerun_get_model()
-    end1 = time.time()
-    print('rerun_get_model time: %s minutes' % ((end1 - start1) / 60))
-    # # 4 用于重新预测打标，生成预测文件
-    start2 = time.time()
-    # rerun_predict_result()
-    end2 = time.time()
-    print('rerun_predict_result time: %s minutes' % ((end2 - start2) / 60))
-    # 绘制收敛次数图像
-    # draw_trend(model_fit)
-
 # nohup python -u main.py > log.log 2>&1 &

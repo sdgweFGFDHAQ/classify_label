@@ -1,17 +1,15 @@
 import os
-import time
 from multiprocessing import Pool
 
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader, TensorDataset
+from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import warnings
 
 from transformers import AutoModel, AutoTokenizer
 
 from global_parameter import StaticParameter as SP
-from model_bert import BertLSTMNet_1
 from mini_tool import WordSegment, error_callback
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -136,9 +134,6 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
     result = pd.DataFrame(
         {'id': df['id'], 'name': df['name'], 'state': df['state'],
          'predict_category': cate_lists, 'threshold_category': threshold_cate_lists, 'max_value': max_value_lists})
-    # result = pd.DataFrame(
-    #     {'id': df['id'], 'name': df['name'], 'state': df['state'], 'category1_new': df['category1_new'],
-    #      'predict_category': cate_lists, 'threshold_category': threshold_cate_lists, 'max_value': max_value_lists})
 
     path_part = SP.PATH_ZZX_PREDICT_DATA + 'predict_CK_category_' + str(part_i) + '.csv'
     if os.path.exists(path_part) and os.path.getsize(path_part):
@@ -148,11 +143,6 @@ def predict_result(df, dataloder, model, idx2lab, part_i):
 
 
 def predict_csv(pi, model, idx2lab):
-    # pool = Pool(processes=4)
-    # for part_i in range(6, SP.SEGMENT_NUMBER):
-    #     pool.apply_async(predict_csv, args=(part_i, lstm_model, idx2lab), error_callback=error_callback)
-    # pool.close()
-    # pool.join()
     df = pd.read_csv(SP.PATH_ZZX_STANDARD_DATA + 'standard_CK_store_' + str(pi) + '.csv', chunksize=chunksize)
     for df_i in df:
         df_i = df_i[(df_i['cut_name'].notna() & df_i['cut_name'].notnull())]
@@ -176,7 +166,7 @@ def predict_result_forCK_bert():
     idx2lab = dict(zip(cat_df['cat_id'], cat_df['category1_new']))
     idx2lab[-1] = SP.UNKNOWN_CATEGORY
 
-    bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
+    # bert_layer = AutoModel.from_pretrained(pretrian_bert_url)
     # lstm_model = BertLSTMNet_1(
     #     bert_embedding=bert_layer,
     #     input_dim=768,
@@ -199,10 +189,3 @@ def predict_result_forCK_bert():
 
             print("predict_CK_category_{} 写入完成".format(part_i))
 
-
-if __name__ == '__main__':
-    cities = []
-    # pred预测集
-    # rerun_get_CK_file(cities)
-
-    predict_result_forCK_bert()

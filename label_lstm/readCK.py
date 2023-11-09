@@ -208,20 +208,26 @@ def upload_predict_data():
 
 
 if __name__ == '__main__':
+    start0 = time.time()
     # sql查询获取城市集合
-    # city_list = get_cities()
-    # 条件查询划分8个csv文件
-    # get_data(city_list)
+    city_list = get_cities()
     # 全新方法 每查询100w条就保存为一个csv
     get_data_offset(file_prefix='store_CK_data_')
+    end0 = time.time()
+    logging.info('下载所需预测集 time: %s minutes' % ((end0 - start0) / 60))
+
     start1 = time.time()
     # # 加载模型 预测结果
-    # rerun_get_CK_file(city_list)
+    rerun_get_CK_file(city_list)
     predict_result_forCK_bert()
     end1 = time.time()
     logging.info('加载模型 预测结果 time: %s minutes' % ((end1 - start1) / 60))
+
+    start2 = time.time()
     # # 分类算法预测类别，建表并上传数据
     upload_predict_data()
+    end2 = time.time()
+    logging.info('链接数据库 上传数据集 time: %s minutes' % ((end2 - start2) / 60))
 # nohup python -u readCK.py > /dev/null 2>&1 &
 
 # 插入数据
