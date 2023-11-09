@@ -4,7 +4,7 @@ import time
 from pyhive import hive
 import pandas as pd
 
-from label_lstm.deep_learning_bert import random_get_trainset, add_other_category, rerun_get_model, rerun_get_file
+from deep_learning_bert import random_get_trainset, add_other_category, rerun_get_model, rerun_get_file
 
 
 def download_data():
