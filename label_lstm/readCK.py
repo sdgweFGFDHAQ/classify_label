@@ -13,7 +13,7 @@ from global_parameter import StaticParameter as SP
 from predict_for_CK import rerun_get_CK_file, predict_result_forCK_bert
 
 # FLAGS = flags.FLAGS
-logging.basicConfig(filename="logging.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
+logging.basicConfig(filename="readCK_logging.log", filemode="w", format="%(asctime)s %(name)s:%(levelname)s:%(message)s",
                     datefmt="%d-%M-%Y %H:%M:%S", level=logging.INFO)
 
 # flags.DEFINE_string(
